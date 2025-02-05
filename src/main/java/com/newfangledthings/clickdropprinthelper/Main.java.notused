@@ -1,0 +1,583 @@
+package com.newfangledthings;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.pdmodel.*;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.graphics.PDXObject;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
+import org.apache.pdfbox.text.PDFTextStripper;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.*;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.Properties;
+
+import net.sourceforge.tess4j.*;
+
+import static java.nio.file.StandardWatchEventKinds.*;
+
+public class Main {
+
+    static boolean isAmazon;
+    //static String output;
+
+    /**
+     * Opening class to setup File Watcher
+     *
+     * @param args are not used
+     * @throws InterruptedException
+     */
+    public static void main(String[] args) throws IOException, InterruptedException {
+
+        // Initialise config class, will create a new config.properties file if it doesn't exist
+        Config config = new Config("config.properties");
+
+        // If args are set create a firendly message that args are no longer used and will take all settings from config.properties
+        if (args.length > 0) {
+            System.out.println("Arguments are no longer used, all settings are now taken from config.properties in the working folder");
+        }
+
+        // Get settings from config.properties
+        String watchFolder = config.getProperty("watchFolder");
+        String workingFolder = config.getProperty("workingFolder");
+        boolean createProofOfPostage = config.getProperty("createProofOfPostage").equals("yes");
+        boolean createLabels = config.getProperty("createLabels").equals("yes");
+        boolean createPackingSlips = config.getProperty("createPackingSlips").equals("yes");
+        boolean createQRs = config.getProperty("createQRs").equals("yes");
+        String packingSlipHeaderImage = config.getProperty("packingSlipHeaderImage");
+        String packingSlipFooterImage = config.getProperty("packingSlipFooterImage");
+
+        // Display all the var from above
+        System.out.println("Properties loaded from config.properties");
+
+        // Create watch service to monitor download folder
+        WatchService watchService = FileSystems.getDefault().newWatchService();
+        Path path = Paths.get(watchFolder);
+        path.register(watchService, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE);
+        System.out.println("Monitoring download folder [" + watchFolder + "] for pdfs");
+
+        // Poll for events (look for pdf files in watch folder)
+        boolean poll = true;
+        while (poll) {
+
+            WatchKey key = watchService.take();
+
+            for (WatchEvent<?> event : key.pollEvents()) {
+                //quick pause to stop file locking
+                TimeUnit.SECONDS.sleep(1);
+
+                if (event.kind() == ENTRY_CREATE && event.context().toString().endsWith(".pdf")) {
+                    System.out.println("Processing event kind : " + event.kind() + " - File : " + event.context());
+
+                    // PDF found, will now see if it's a C&D or Amazon shipping label
+
+                    // process pdf
+                    for (ProofOfPostageDocument popDoc : createProofOfPostage(watchFolder + "\\" + event.context(), workingFolder)) {
+
+                        // Add qr codes to pdf
+                        if (createQRs) {
+                            addQRCodesToProofOfPostage(popDoc, workingFolder);
+                        }
+
+                        // If you have asked for no proof of postage then delete the first page or delete the file is qr codes don't exist
+                        if (!createProofOfPostage) {
+                            if(!createQRs){
+                                System.out.println("Deleting pdf " + event.context());
+                                Files.delete(Paths.get(watchFolder + "\\" + event.context()));
+                            }
+                            else {
+                                PDDocument doc = PDDocument.load(new File(workingFolder + "\\" + popDoc.getFilename()));
+                                doc.removePage(0);
+                                doc.save(workingFolder + "\\" + popDoc.getFilename());
+                                doc.close();
+                            }
+                        }
+
+                        // If createPackingSlips is true copy original pdf to working folder then remove every 5th page (which is the label)
+                        if (createPackingSlips) {
+                            var packingFilename = "packing_" + UUID.randomUUID() + ".pdf";
+                            FileUtils.copyFile(new File(watchFolder + "\\" + event.context()), new File(workingFolder + "\\" + packingFilename));
+                            PDDocument doc = PDDocument.load(new File(workingFolder + "\\" + packingFilename));
+                            // Find out the number of pages then remove every 5th page
+                            int pageCount = doc.getNumberOfPages();
+                            List<Integer> pagesToRemove = new ArrayList<>();
+                            // Collect indices of every fifth page
+                            for (int i = 0; i < pageCount; i++) {
+                                if ((i + 1) % 5 == 0) {
+                                    pagesToRemove.add(i);
+                                }
+                            }
+                            // Remove pages in reverse order
+                            for (int i = pagesToRemove.size() - 1; i >= 0; i--) {
+                                doc.removePage(pagesToRemove.get(i));
+                            }
+                            // now we want to add a custom header and footer to each page of the pdf
+                            PDPageTree list = doc.getPages();
+                            var pageWidth = doc.getPage(0).getMediaBox().getWidth();
+                            var pageHeight = doc.getPage(0).getMediaBox().getHeight();
+                            for (PDPage page : list) {
+                                PDResources pdResources = page.getResources();
+                                PDPageContentStream contents = new PDPageContentStream(doc, page, PDPageContentStream.AppendMode.APPEND, true, true);
+                                // Check if packing slip header and footer exists
+                                if (new File(workingFolder + "\\" + packingSlipHeaderImage).exists()) {
+                                    PDImageXObject image = PDImageXObject.createFromFile(workingFolder + "\\" + packingSlipHeaderImage, doc);
+                                    var height = (image.getHeight() * pageWidth) / image.getWidth();
+                                    contents.drawImage(image, 0, pageHeight - height, pageWidth, height);
+                                }
+                                if (new File(workingFolder + "\\" + packingSlipFooterImage).exists()) {
+                                    PDImageXObject image = PDImageXObject.createFromFile(workingFolder + "\\" + packingSlipFooterImage, doc);
+                                    var height = (image.getHeight() * pageWidth) / image.getWidth();
+                                    contents.drawImage(image, 0, 0, pageWidth, height);
+                                }
+                                contents.close();
+                            }
+                            doc.save(workingFolder + "\\" + packingFilename);
+                            doc.close();
+                            openPDF(workingFolder + "\\" + packingFilename);
+                        }
+
+                        // If createLabels is true then open the pdf with the labels
+                        if (createLabels) {
+                            var labelsFilename = "labels_" + UUID.randomUUID() + ".pdf";
+                            FileUtils.copyFile(new File(watchFolder + "\\" + event.context()), new File(workingFolder + "\\" + labelsFilename));
+                            PDDocument doc = PDDocument.load(new File(workingFolder + "\\" + labelsFilename));
+                            // Find out the number of pages then remove every 5th page
+                            int pageCount = doc.getNumberOfPages();
+                            List<Integer> pagesToRemove = new ArrayList<>();
+                            // Collect indices of every fifth page
+                            for (int i = 0; i < pageCount; i++) {
+                                if (!((i + 1) % 5 == 0)) {
+                                    pagesToRemove.add(i);
+                                }
+                            }
+                            // Remove pages in reverse order
+                            for (int i = pagesToRemove.size() - 1; i >= 0; i--) {
+                                doc.removePage(pagesToRemove.get(i));
+                            }
+                            doc.save(workingFolder + "\\" + labelsFilename);
+                            doc.close();
+                            openPDF(workingFolder + "\\" + labelsFilename);
+                        }
+
+                        // If packing slips and labels are not created then open the original pdf
+                        if (!createLabels && !createPackingSlips) {
+                            System.out.println("Opening original pdf " + event.context());
+                            openPDF(watchFolder + "\\" + event.context());
+                        }
+
+                        // Open the proof of postage pdf
+                        System.out.println("Opening POP pdf " + popDoc.getFilename());
+                        openPDF(workingFolder + "\\" + popDoc.getFilename());
+                    }
+
+                    // create postage label document
+                    if (isAmazon) {
+                        String filename = createAmazonPostageLabels(watchFolder + "\\" + event.context(), workingFolder);
+                        System.out.println("Opening Amazon shipping pdf "+ filename);
+                        openPDF(" \"" + workingFolder + "\\" + filename);
+                    }
+                }
+                if (event.kind() == ENTRY_CREATE && event.context().toString().startsWith("amznbulklabels")) {
+                    System.out.println("Processing event kind : " + event.kind() + " - File : " + event.context());
+                    if (event.context().toString().endsWith(".zip")) {
+
+                        try {
+                            Zip.unzip(watchFolder + "\\" + event.context(), watchFolder);
+                        } catch (Exception e) {
+                            System.out.println("ERROR: [" + e.toString() + "\"]");
+                        }
+                        finally {
+                            FileUtils.copyFile(
+                                    new File(watchFolder + "\\" + event.context().toString().replace(".zip", "\\0_MergedLabelDoc.pdf")),
+                                    new File(watchFolder + "\\oal_" + UUID.randomUUID() + ".pdf"));
+                        }
+                    }
+                }
+                else {
+                    System.out.println("Ignoring event kind : " + event.kind() + " - File : " + event.context());
+                }
+            }
+            poll = key.reset();
+        }
+    }
+
+    /**
+     * Gets the viewerExec from the config.properties file and opens the pdf in a separate thread
+     */
+    private static void openPDF(String filename) {
+        new Thread(() -> {
+            try {
+                Config config = new Config("config.properties");
+                // Add a slight delay to allow the file to be written to disk
+                Thread.sleep(config.getProperty("viewerDelay") != null ? Integer.parseInt(config.getProperty("viewerDelay")) * 1000 : 0);
+                // Open the file
+                String viewerExec = config.getProperty("viewerExec");
+                Runtime.getRuntime().exec(viewerExec + " \"" + filename + "\"");
+            } catch (IOException | InterruptedException e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    /**
+     * Uses pdfBox to open a Royal Mail PDF and extract text from the shipping label.
+     * Once this is done it will then open the Royal Mail proof of postage pdf and
+     * populate the boxes with the text stripped from the shipping labels.
+     *
+     * @param filename      is the file that it will attempt to process
+     * @param workingFolder is the folder where the prof of postage pdf will loaded and stored
+     */
+    public static ProofOfPostageDocument[] createProofOfPostage(String filename, String workingFolder) {
+        ArrayList<ProofOfPostageDocument> popDocs = new ArrayList<>();
+        try {
+
+            System.out.println("Attempting to process " + filename);
+
+            // using openPdf will load the pdf that is hopefully a C&D or Amazon shipping labels.
+            PDDocument pdfShippingLabels = PDDocument.load(new File(filename));
+            String text = new PDFTextStripper().getText(pdfShippingLabels);
+
+            String output = "";
+
+            System.out.println("Found this text: \\n\\n" + text);
+
+            //will loop though the text hoping to find the text 'Postage Paid GB'
+            String[] lines = text.split("\\r\\n");
+
+            for (int i = 0; i <= lines.length - 1; i++) {
+                //C&D label
+                if (lines[i].contains("Postage Paid GB")) {
+                    isAmazon = false;
+                    // found postage page text, will now get the name , address and tracking number
+                    System.out.println("Processing Click & Drop");
+                    if (lines[i - 2].startsWith("Tracked")){
+                        //tracked
+                        output +=
+                                lines[i - 6] + "¬" +
+                                        lines[i -5] + " " + lines[i - 4] + " " + lines[i - 3] + "¬" +
+                                        lines[i - 2].replace("No Signature","") + " " + lines[i + 3].replace(" ", "").replace("-", "") + System.lineSeparator();
+                    }
+                    else {
+                        //1st or 2nd class
+                        output +=
+                                lines[i - 6] + "¬" +
+                                        lines[i -5] + " " + lines[i - 4] + " " + lines[i - 3] + "¬" +
+                                        lines[i - 2] + " " + lines[i + 3].replace(" ", "").replace("-", "") + System.lineSeparator();
+                    }
+
+
+
+
+                }
+                //Amazon label
+                else if (lines[i].contains("List of orders with successful label purchase")) {
+                    isAmazon = true;
+                    System.out.println("Processing amazon labels via ocr");
+                    //output = Arrays.stream(Arrays.copyOfRange(lines, i+1,lines.length)).toString();
+                    //run a function to get the output text via ocr
+                    output += extractTextFromAmazonLabels(pdfShippingLabels);
+                    // exit for next loop as not point looping through amazon pdf
+                    break;
+                }
+            }
+
+            // Output file is empty to will end early as there is nothing to add to proof of postage
+            if (output == "") {
+                    System.out.println("Output file is empty, exiting early");
+                    return null;
+            }
+
+            // Will now attempt to add the output file to 1 or more proof of postage
+
+            // If there is over 30 items it will loop thought creating the proof of
+            // postage pdf a number of times as it will only hold 30 items
+            String[] outputs = output.split(System.lineSeparator());
+            for (int p = 0; p <= outputs.length - 1; p = p + 30) {
+
+                // Load Royal Mail proof of postage pdf ready to repopulate!
+                File file = new File(workingFolder + "\\Royal Mail Proof Of Postage.pdf");
+                PDDocument pdfRoyalMailTemplate = PDDocument.load(file);
+                PDDocumentCatalog docCatalog = pdfRoyalMailTemplate.getDocumentCatalog();
+                PDAcroForm acroForm = docCatalog.getAcroForm();
+
+                // populate the forms from the pdf text stored in the outputs string array
+                int countForNumberofItems = 0;
+                for (int i = p; i <= outputs.length - 1; i++) {
+
+                    if (i > p + 29) {
+                        System.out.println("Over 30 items exiting early!");
+                        break;
+                    }
+
+                    String[] line = outputs[i].split("¬");
+
+                    if ((i - p) == 0) {
+                        acroForm.getField("1").setValue(line[0]);
+                        acroForm.getField("my text here").setValue(line[1]);
+                        acroForm.getField("service used 1").setValue(line[2]);
+                    } else {
+                        acroForm.getField("" + ((i - p) + 1)).setValue(line[0]);
+                        acroForm.getField("address and postcode " + ((i - p) + 1)).setValue(line[1]);
+                        acroForm.getField("service used " + ((i - p) + 1)).setValue(line[2]);
+                    }
+
+                    System.out.println("Content added [" + line[0] + "," + line[1] + "," + line[2] + "]");
+                    countForNumberofItems++;
+                }
+
+                // add date and number of items
+                acroForm.getField("Text57").setValue(countForNumberofItems + " items");
+                acroForm.getField("Text58").setValue(new SimpleDateFormat("dd/MM/yyyy").format(new Date()));
+
+                // Save populated pdf file with unique guid filename
+                String uniqueFilename = "proof_" + UUID.randomUUID() + ".pdf";
+                pdfRoyalMailTemplate.save(workingFolder + "\\" + uniqueFilename);
+                pdfRoyalMailTemplate.close();
+
+                popDocs.add(new ProofOfPostageDocument(
+                        uniqueFilename,
+                        output,//Arrays.copyOfRange(output.split(System.lineSeparator()),p,p+30).toString(),  /duplicated, need to be added to a collection class really, another time?
+                        filename,
+                        p));
+
+            } // will loop again if over 30 items
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return popDocs.toArray(new ProofOfPostageDocument[0]);
+    }
+
+    /**
+     * Uses pdfBox to open a Royal Mail PDF and extract QR codes from the shipping label.
+     *
+     * @param popDocument   is the proof of postage document object that hold all the data required to create the pdf
+     * @param workingFolder is the folder where the images will be extracted to
+     */
+    public static void addQRCodesToProofOfPostage(ProofOfPostageDocument popDocument, String workingFolder) {
+        try {
+            System.out.println("Attempting to process " + workingFolder + "\\" + popDocument.getFilename() + " for images");
+
+            PDDocument docLoad = PDDocument.load(new File(popDocument.getSourcePDF()));
+            PDDocument docProofPostage = PDDocument.load(new File(workingFolder + "\\" + popDocument.getFilename()));
+            PDPage newPage = new PDPage(PDRectangle.A4);
+            PDPageContentStream contents = new PDPageContentStream(docProofPostage, newPage);
+            docProofPostage.addPage(newPage);
+
+            PDPageTree list = docLoad.getPages();
+            int x = 40, y = 750, count = 0; // Start from the top-left corner
+            for (PDPage page : list) {
+                PDResources pdResources = page.getResources();
+
+                for (COSName c : pdResources.getXObjectNames()) {
+                    PDXObject o = pdResources.getXObject(c);
+                    if (o instanceof PDImageXObject) {
+                        if (((PDImageXObject) o).getWidth() == 128 || ((PDImageXObject) o).getWidth() == 1050) {
+                            System.out.println("Found QR code");
+
+                            if (count >= popDocument.getImageIndex() && count <= popDocument.getImageIndex() + 30) {
+                                contents.beginText();
+                                contents.setFont(PDType1Font.COURIER, 9);
+                                contents.newLineAtOffset(x, y - 15);
+                                contents.showText(popDocument.getContent().split(System.lineSeparator())[count].split("¬")[2].substring(10));
+                                contents.endText();
+
+                                if (((PDImageXObject) o).getWidth() == 1050) {
+                                    PDImageXObject pdi = LosslessFactory.createFromImage(docLoad, ((PDImageXObject) o).getImage().getSubimage(70, 450, 280, 280));
+                                    contents.drawImage(pdi, x, y, pdi.getWidth() / 5, pdi.getHeight() / 5);
+                                } else {
+                                    contents.drawImage((PDImageXObject) o, x, y, 60, 60);
+                                }
+
+                                x += 110; // Move right for the next image
+                                if (x > 500) { // Adjust the limit as needed
+                                    x = 40;
+                                    y -= 135; // Move down for the next row
+                                }
+                            } else {
+                                System.out.println("Image already added to previous pdf, skipping");
+                            }
+
+                            count++;
+                        } else {
+                            System.out.println("Output image not QR, skipping");
+                        }
+                    }
+                }
+            }
+
+            contents.close();
+            docProofPostage.save(workingFolder + "\\" + popDocument.getFilename());
+            docProofPostage.close();
+            docLoad.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static String extractTextFromAmazonLabels(PDDocument docLoad) {
+
+        try {
+
+            String output = "";
+
+            PDPageTree list = docLoad.getPages();
+
+            for (PDPage page : list) {
+                System.out.println("found image for ocr");
+                PDResources pdResources = page.getResources();
+                for (COSName c : pdResources.getXObjectNames()) {
+                    PDXObject o = pdResources.getXObject(c);
+                    if (o instanceof org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject) {
+
+                        //check it's the correct dimentions for an Amazon full label
+                        if (((PDImageXObject) o).getWidth() == 1050) {
+
+                            Tesseract instance = new Tesseract();
+
+                            instance.setDatapath("C:\\Users\\allan\\AppData\\Local\\tessdata");
+                            instance.setLanguage("eng");
+                            instance.setTessVariable("user_defined_dpi", "96");
+
+                            try {
+                                String name = instance.doOCR(((PDImageXObject) o).getImage().getSubimage(40,840,700,100)).trim();
+                                String address =
+                                        instance.doOCR(((PDImageXObject) o)
+                                                .getImage()
+                                                .getSubimage(40,925,700,300))
+                                                .replace("\n", " ")
+                                                .replace("\r", " ")
+                                                .trim();
+                                String service = instance.doOCR(((PDImageXObject) o).getImage().getSubimage(35,10,700,130)).trim();
+                                String ref = instance.doOCR(((PDImageXObject) o).getImage().getSubimage(60,360,400,60)).trim();
+
+                                // clean up the reference
+                                char[] refs = ref.replace(" ", "").replace("-", "").toCharArray();
+                                if (refs[1] == '8') { refs[1] = 'B'; }
+                                if (refs[10] == '8') { refs[10] = 'B'; }
+
+                                System.out.println("Processing [" +name + "]");
+                                output +=
+                                        name + "¬" +
+                                        address + "¬" +
+                                        service + " " + String.valueOf(refs) + System.lineSeparator();
+
+                            } catch (Exception e) {
+                                System.err.println(e.getMessage());
+                            }
+
+                        }
+                        else {
+                            System.out.println("output image not amazon shipping label skipping");
+                        }
+
+                    }
+                }
+            }
+
+            //Closing the document
+            docLoad.close();
+
+            return output;
+
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "";
+        }
+    }
+
+    private static String createAmazonPostageLabels(String filename, String workingFolder) throws IOException {
+
+        System.out.println("Attempting to process " + filename);
+
+        try {
+
+            // using openPdf will load the pdf that is hopefully a C&D or Amazon shipping labels.
+            PDDocument pdfShippingLabels = PDDocument.load(new File(filename));
+
+            // Create a new pdf for new shipping labels
+            PDDocument pdfNewShippingLabels = new PDDocument();
+            // Setup page
+            PDPageContentStream contents= null;
+
+            // get order numbers
+            String orderNumbers[] = new PDFTextStripper().getText(pdfShippingLabels).replace("-\r\n","").trim().split("\r\n");
+
+            //get images
+            PDPageTree list = pdfShippingLabels.getPages();
+
+            int x = 0, y = 0, count = 0;
+            for (PDPage p : list) {
+                PDResources pdResources = p.getResources();
+
+                for (COSName c : pdResources.getXObjectNames()) {
+                    PDXObject o = pdResources.getXObject(c);
+
+                    // Image found
+                    if (o instanceof org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject) {
+
+                        // Create new page on count 0,4,8,12,16,etc
+                        if (count % 4 == 0) {
+                            if (contents!=null){ contents.close(); };
+                            PDPage page = new PDPage(PDRectangle.A4);
+                            contents = new PDPageContentStream(pdfNewShippingLabels, page);
+                            pdfNewShippingLabels.addPage(page);
+                            x = 25;
+                            y = 35;
+                            System.out.println("new page created");
+                        }
+
+                        //add image
+                        contents.drawImage(((PDImageXObject) o), x, y, ((PDImageXObject) o).getWidth() / 4, ((PDImageXObject) o).getHeight() / 4);
+                        System.out.println("Added image in position x " + x + ",y " + y);
+
+                        //add text
+                        contents.beginText();
+                        contents.setFont(PDType1Font.HELVETICA, 10);
+                        contents.newLineAtOffset(x+20, y+20);
+                        contents.showText(orderNumbers[count+1]);
+                        contents.endText();
+                        System.out.println("added text["+count+1+"]: "+orderNumbers[count]);
+
+                        //reposition next image
+                        x += 292;
+                        if (x > 550) {
+                            x = 25;
+                            y += 400;
+                        }
+
+                        count++;
+                    }
+                }
+            }
+
+            //create unique filename
+            String uniqueFilename = "shipping_" + UUID.randomUUID() + ".pdf";
+
+            //close the new postage pdf and save
+            contents.close();
+            pdfNewShippingLabels.save(workingFolder + "\\" + uniqueFilename);
+            pdfNewShippingLabels.close();
+
+            // close the shipping pdf
+            pdfShippingLabels.close();
+
+            return uniqueFilename;
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+}
