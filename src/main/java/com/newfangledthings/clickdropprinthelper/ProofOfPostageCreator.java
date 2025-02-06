@@ -14,20 +14,22 @@ import org.apache.pdfbox.text.PDFTextStripper;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.UUID;
 
 public class ProofOfPostageCreator {
 
     private final Config config;
-    private final String workingFolder;
+    private final String storeFolder;
+    private final String watchFolder;
 
     public ProofOfPostageCreator(Config config) {
         this.config = config;
-        this.workingFolder = config.getProperty("WorkingFolder");
+        this.storeFolder = config.getProperty("StoreFolder");
+        this.watchFolder = config.getProperty("WatchFolder");
     }
 
     /**
@@ -39,9 +41,8 @@ public class ProofOfPostageCreator {
      */
     public ProofOfPostage[] createProofOfPostage(String filename) {
         ArrayList<ProofOfPostage> proofOfPostageArrayList = new ArrayList<>();
-        try {
+        try (PDDocument pdfShippingLabels = PDDocument.load(new File(watchFolder + "\\" + filename))) {
             System.out.println("Attempting to process " + filename);
-            PDDocument pdfShippingLabels = PDDocument.load(new File(filename));
             String text = new PDFTextStripper().getText(pdfShippingLabels);
             List<ShippingLabel> shippingLabels = new ArrayList<>();
             int countTrackingNumbers = 0;
@@ -62,12 +63,13 @@ public class ProofOfPostageCreator {
                     countTrackingNumbers++;
                 }
             }
-            if (shippingLabels.size() == 0) {
+            if (shippingLabels.isEmpty()) {
                 System.out.println("Output file is empty, exiting early");
                 return null;
             }
             for (int p = 0; p < shippingLabels.size(); p += 30) {
-                File file = new File(workingFolder + "\\Royal Mail Proof Of Postage.pdf");
+                InputStream file = getClass().getClassLoader().getResourceAsStream("Royal Mail Proof Of Postage.pdf");
+                //File file = new File(workingFolder + "\\Royal Mail Proof Of Postage.pdf");
                 PDDocument pdfRoyalMailTemplate = PDDocument.load(file);
                 PDDocumentCatalog docCatalog = pdfRoyalMailTemplate.getDocumentCatalog();
                 PDAcroForm acroForm = docCatalog.getAcroForm();
@@ -88,8 +90,9 @@ public class ProofOfPostageCreator {
                 }
                 acroForm.getField("Text57").setValue(countForNumberofItems + " items");
                 acroForm.getField("Text58").setValue(new SimpleDateFormat("dd/MM/yyyy").format(new Date()));
-                String uniqueFilename = "proof_" + UUID.randomUUID() + ".pdf";
-                pdfRoyalMailTemplate.save(workingFolder + "\\" + uniqueFilename);
+
+                String uniqueFilename = FilenameGenerator.generateFilename(filename,"proof");
+                pdfRoyalMailTemplate.save(storeFolder + "\\" + uniqueFilename);
                 pdfRoyalMailTemplate.close();
                 proofOfPostageArrayList.add(new ProofOfPostage(
                         uniqueFilename,
@@ -98,7 +101,8 @@ public class ProofOfPostageCreator {
                         p));
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Error creating proof of postage: " + e.getMessage());
+            e.printStackTrace(System.err);
         }
         return proofOfPostageArrayList.toArray(new ProofOfPostage[0]);
     }
@@ -110,10 +114,10 @@ public class ProofOfPostageCreator {
      */
     public void addQRCodesToProofOfPostage(ProofOfPostage proofOfPostage) {
         try {
-            System.out.println("Attempting to process " + workingFolder + "\\" + proofOfPostage.getFilename() + " for images");
+            System.out.println("Attempting to process " + storeFolder + "\\" + proofOfPostage.getFilename() + " for images");
 
-            PDDocument docLoad = PDDocument.load(new File(proofOfPostage.getSourcePDF()));
-            PDDocument docProofPostage = PDDocument.load(new File(workingFolder + "\\" + proofOfPostage.getFilename()));
+            PDDocument docLoad = PDDocument.load(new File(watchFolder + "\\" + proofOfPostage.getSourcePDF()));
+            PDDocument docProofPostage = PDDocument.load(new File(storeFolder + "\\" + proofOfPostage.getFilename()));
             PDPage newPage = new PDPage(PDRectangle.A4);
             PDPageContentStream contents = new PDPageContentStream(docProofPostage, newPage);
             docProofPostage.addPage(newPage);
@@ -137,7 +141,7 @@ public class ProofOfPostageCreator {
                                 if (trackingNumber.length() > 10) {
                                     contents.beginText();
                                     contents.setFont(PDType1Font.COURIER, 9);
-                                    contents.newLineAtOffset(x, y - 15);
+                                    contents.newLineAtOffset(x-5, y - 15);
                                     contents.showText(trackingNumber.substring(10));
                                     contents.endText();
 
@@ -152,7 +156,7 @@ public class ProofOfPostageCreator {
 
                                 if (((PDImageXObject) o).getWidth() == 1050) {
                                     PDImageXObject pdi = LosslessFactory.createFromImage(docLoad, ((PDImageXObject) o).getImage().getSubimage(70, 450, 280, 280));
-                                    contents.drawImage(pdi, x, y, pdi.getWidth() / 5, pdi.getHeight() / 5);
+                                    contents.drawImage(pdi, x, y, (float) pdi.getWidth() / 5, (float) pdi.getHeight() / 5);
                                 } else {
                                     contents.drawImage((PDImageXObject) o, x, y, 60, 60);
                                 }
@@ -173,26 +177,26 @@ public class ProofOfPostageCreator {
                     }
                 }
             }
-
             contents.close();
-            docProofPostage.save(workingFolder + "\\" + proofOfPostage.getFilename());
+            docProofPostage.save(storeFolder + "\\" + proofOfPostage.getFilename());
             docProofPostage.close();
             docLoad.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Error adding QR codes: " + e.getMessage());
+            e.printStackTrace(System.err);
         }
     }
 
     public void removeFirstPage(ProofOfPostage proofOfPostage) throws IOException {
-        PDDocument doc = PDDocument.load(new File(workingFolder + "\\" + proofOfPostage.getFilename()));
+        PDDocument doc = PDDocument.load(new File(storeFolder + "\\" + proofOfPostage.getFilename()));
         doc.removePage(0);
-        doc.save(workingFolder + "\\" + proofOfPostage.getFilename());
+        doc.save(storeFolder + "\\" + proofOfPostage.getFilename());
         doc.close();
     }
 
     public void createPackingSlips(ProofOfPostage proofOfPostage, String packingFilename) throws IOException {
-        FileUtils.copyFile(new File(config.getProperty("WatchFolder") + "\\" + proofOfPostage.getSourcePDF()), new File(workingFolder + "\\" + packingFilename));
-        PDDocument doc = PDDocument.load(new File(workingFolder + "\\" + packingFilename));
+        FileUtils.copyFile(new File(watchFolder + "\\" + proofOfPostage.getSourcePDF()), new File(storeFolder + "\\" + packingFilename));
+        PDDocument doc = PDDocument.load(new File(storeFolder + "\\" + packingFilename));
         // Find out the number of pages then remove every 5th page
         int pageCount = doc.getNumberOfPages();
         List<Integer> pagesToRemove = new ArrayList<>();
@@ -201,6 +205,10 @@ public class ProofOfPostageCreator {
             if ((i + 1) % 5 == 0) {
                 pagesToRemove.add(i);
             }
+        }
+        // Check if the last page is not a multiple of 5 and add it to the list
+        if (pageCount % 5 != 0) {
+            pagesToRemove.add(pageCount - 1);
         }
         // Remove pages in reverse order
         for (int i = pagesToRemove.size() - 1; i >= 0; i--) {
@@ -211,30 +219,29 @@ public class ProofOfPostageCreator {
         var pageWidth = doc.getPage(0).getMediaBox().getWidth();
         var pageHeight = doc.getPage(0).getMediaBox().getHeight();
         for (PDPage page : list) {
-            PDResources pdResources = page.getResources();
             PDPageContentStream contents = new PDPageContentStream(doc, page, PDPageContentStream.AppendMode.APPEND, true, true);
             // Check if packing slip header and footer exists
             String headerImage = config.getProperty("PackingSlipHeaderImage");
-            if (new File(workingFolder + "\\" + headerImage ).exists()) {
-                PDImageXObject image = PDImageXObject.createFromFile(workingFolder + "\\" + headerImage, doc);
+            if (new File( headerImage ).exists()) {
+                PDImageXObject image = PDImageXObject.createFromFile(headerImage, doc);
                 var height = (image.getHeight() * pageWidth) / image.getWidth();
                 contents.drawImage(image, 0, pageHeight - height, pageWidth, height);
             }
             String footerImage = config.getProperty("PackingSlipFooterImage");
-            if (new File(workingFolder + "\\" + footerImage).exists()) {
-                PDImageXObject image = PDImageXObject.createFromFile(workingFolder + "\\" + footerImage, doc);
+            if (new File(footerImage).exists()) {
+                PDImageXObject image = PDImageXObject.createFromFile(footerImage, doc);
                 var height = (image.getHeight() * pageWidth) / image.getWidth();
                 contents.drawImage(image, 0, 0, pageWidth, height);
             }
             contents.close();
         }
-        doc.save(workingFolder + "\\" + packingFilename);
+        doc.save(storeFolder + "\\" + packingFilename);
         doc.close();
     }
 
     public void createLabels(ProofOfPostage proofOfPostage, String labelsFilename) throws IOException {
-        FileUtils.copyFile(new File(config.getProperty("WatchFolder") + "\\" + proofOfPostage.getSourcePDF()), new File(workingFolder + "\\" + labelsFilename));
-        PDDocument doc = PDDocument.load(new File(workingFolder + "\\" + labelsFilename));
+        FileUtils.copyFile(new File(watchFolder + "\\" + proofOfPostage.getSourcePDF()), new File(storeFolder + "\\" + labelsFilename));
+        PDDocument doc = PDDocument.load(new File(storeFolder + "\\" + labelsFilename));
         // Find out the number of pages then remove every 5th page
         int pageCount = doc.getNumberOfPages();
         List<Integer> pagesToRemove = new ArrayList<>();
@@ -244,11 +251,15 @@ public class ProofOfPostageCreator {
                 pagesToRemove.add(i);
             }
         }
+        // Check if the last page is not a multiple of 5 and add it to the list
+        if (pageCount % 5 != 0) {
+            pagesToRemove.remove(pageCount - 1);
+        }
         // Remove pages in reverse order
         for (int i = pagesToRemove.size() - 1; i >= 0; i--) {
             doc.removePage(pagesToRemove.get(i));
         }
-        doc.save(workingFolder + "\\" + labelsFilename);
+        doc.save(storeFolder + "\\" + labelsFilename);
         doc.close();
     }
 }

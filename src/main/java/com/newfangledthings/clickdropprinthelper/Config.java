@@ -7,8 +7,8 @@ import java.io.IOException;
 import java.util.Properties;
 
 public class Config {
-    private Properties properties;
-    private File configFile;
+    private final Properties properties;
+    private final File configFile;
 
     public Config(String configFilePath) {
         properties = new Properties();
@@ -29,7 +29,8 @@ public class Config {
         try (FileInputStream input = new FileInputStream(configFile)) {
             properties.load(input);
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Error loading properties: " + e.getMessage());
+            e.printStackTrace(System.err);
         }
     }
 
@@ -51,13 +52,14 @@ public class Config {
             properties.setProperty("PackingSlipFooterImage", "Packing Slip Footer.png");
             properties.setProperty("WatchFolder", "C:\\Users\\allan\\Downloads");
             properties.setProperty("ViewerDelay", "2");
-            properties.setProperty("WorkingFolder", System.getProperty("user.dir"));
+            properties.setProperty("StoreFolder", System.getProperty("user.dir"));
             properties.setProperty("StopWatchAfterFirstRun","no");
 
             properties.store(output, "Default Configuration Settings");
             System.out.println("Default settings saved to config.properties");
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Error creating default config: " + e.getMessage());
+            e.printStackTrace(System.err);
         }
     }
 

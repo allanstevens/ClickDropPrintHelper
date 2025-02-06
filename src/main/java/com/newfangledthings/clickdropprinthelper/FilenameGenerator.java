@@ -1,15 +1,15 @@
 package com.newfangledthings.clickdropprinthelper;
 
-import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
-import java.util.Base64;
 import java.util.Date;
-import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class FilenameGenerator {
 
-    public static String generateTimestampedFilename(String originalFilename, String filetype) {
-        return generateTimestampedFilename(originalFilename,filetype,"pdf");
+    private static final AtomicInteger counter = new AtomicInteger(0);
+
+    public static String generateFilename(String originalFilename, String filetype) {
+        return generateFilename(originalFilename,filetype,"pdf");
     }
 
     /**
@@ -20,24 +20,11 @@ public class FilenameGenerator {
      * @param extension        the file extension
      * @return a timestamped filename
      */
-    public static String generateTimestampedFilename(String originalFilename, String filetype, String extension) {
-        String timestamp = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-        String uniqueID = generateShortUUID();
-        //String extension = originalFilename.substring(originalFilename.lastIndexOf('.'));
+    public static String generateFilename(String originalFilename, String filetype, String extension) {
         String baseName = originalFilename.substring(0, originalFilename.lastIndexOf('.'));
-        return baseName + "_" + timestamp + "_" + uniqueID + "_" + filetype + "." + extension;
+        String timestamp = new SimpleDateFormat("yyyyMMddHHmmssSSS").format(new Date());
+        int increment = counter.incrementAndGet();
+        return timestamp + "-" + filetype + "-" + increment + "-" + baseName + "." + extension;
     }
 
-    /**
-     * Generate a short UUID
-     *
-     * @return a short UUID
-     */
-    public static String generateShortUUID() {
-        UUID uuid = UUID.randomUUID();
-        ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[16]);
-        byteBuffer.putLong(uuid.getMostSignificantBits());
-        byteBuffer.putLong(uuid.getLeastSignificantBits());
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(byteBuffer.array());
-    }
 }

@@ -2,6 +2,8 @@ package com.newfangledthings.clickdropprinthelper;
 
 import java.io.IOException;
 import java.nio.file.*;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static java.nio.file.StandardWatchEventKinds.*;
@@ -30,7 +32,7 @@ public class Main {
             configFilename += ".properties";
         }
         // Load the config file
-        this.config = new Config("config.properties");
+        this.config = new Config(configFilename);
         this.proofOfPostageCreator = new ProofOfPostageCreator(config);
         this.pdfViewer = new PDFViewer(config);
     }
@@ -41,8 +43,6 @@ public class Main {
      * file (config.properties)
      *
      * @param args is the config file
-     * @throws IOException          if the file is not found
-     * @throws InterruptedException if the thread is interrupted
      */
     public static void main(String[] args) throws IOException, InterruptedException {
         Main mainApp;
@@ -53,7 +53,7 @@ public class Main {
             mainApp = new Main();
         }
         // Run the application
-        mainApp.run();
+         mainApp.run();
     }
 
     /**
@@ -67,7 +67,7 @@ public class Main {
 
         // Get settings from config.properties
         String watchFolder = config.getProperty("WatchFolder");
-        String workingFolder = config.getProperty("WorkingFolder");
+        String storeFolder = config.getProperty("StoreFolder");
         boolean createProofOfPostage = config.getProperty("CreateProofOfPostage").equals("yes");
         boolean createLabels = config.getProperty("CreateLabels").equals("yes");
         boolean createPackingSlips = config.getProperty("CreatePackingSlips").equals("yes");
@@ -80,8 +80,11 @@ public class Main {
         // Create watch service to monitor download folder
         WatchService watchService = FileSystems.getDefault().newWatchService();
         Path path = Paths.get(watchFolder);
-        path.register(watchService, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE);
+        path.register(watchService, ENTRY_CREATE);//, ENTRY_MODIFY, ENTRY_DELETE);
         System.out.println("Monitoring download folder [" + watchFolder + "] for pdfs");
+
+        // Set to keep track of processed files so it does not try and convert them again
+        Set<String> processedFiles = new HashSet<>();
 
         // Poll for events (look for pdf files in watch folder)
         boolean poll = true;
@@ -90,14 +93,24 @@ public class Main {
             for (WatchEvent<?> event : key.pollEvents()) {
                 // Quick pause to stop file locking
                 TimeUnit.SECONDS.sleep(1);
+
+                // Get the filename from the event context
+                String filename = event.context().toString();
+
+                // Ignore files that have already been processed
+                if (processedFiles.contains(filename)) {
+                    System.out.println("Ignoring already processed file: " + filename);
+                    continue;
+                }
+
                 // If a pdf is created in the watch folder
-                if (event.kind() == ENTRY_CREATE && event.context().toString().endsWith(".pdf")) {
+                if (event.kind() == ENTRY_CREATE && filename.endsWith(".pdf")) {
                     System.out.println("Processing event kind : " + event.kind() + " - File : " + event.context());
-                    // Get the filename from the event context
-                    String filename = event.context().toString();
+
                     // PDF found, will now see if it's a Royal Mail shipping label
-                    for (ProofOfPostage proofOfPostage : proofOfPostageCreator.createProofOfPostage(watchFolder + "\\" + filename)) {
+                    for (ProofOfPostage proofOfPostage : proofOfPostageCreator.createProofOfPostage(filename)) {
                         //Now the proof of postage has been created with the ProofOfPostageCreator class we can add some extra helper functions
+                        processedFiles.add(proofOfPostage.getFilename());
 
                         //It's a Royal Mail shipping label, will now create the QR codes
                         if (createQRs) {
@@ -118,20 +131,22 @@ public class Main {
 
                         // If createPackingSlips is true copy original pdf to working folder then remove every 5th page (which is the label)
                         if (createPackingSlips) {
-                            var packingFilename = FilenameGenerator.generateTimestampedFilename(filename,"packing");
+                            var packingFilename = FilenameGenerator.generateFilename(filename,"packing");
                             proofOfPostageCreator.createPackingSlips(proofOfPostage,packingFilename);
-                            pdfViewer.openPDF(workingFolder + "\\" + packingFilename, "ViewerExecutePackingSlip");
+                            processedFiles.add(packingFilename);
+                            pdfViewer.openPDF(storeFolder + "\\" + packingFilename, "ViewerExecutePackingSlip");
                         }
 
                         // If createLabels is true then open the pdf with the labels
                         if (createLabels) {
-                            var labelsFilename = FilenameGenerator.generateTimestampedFilename(filename,"labels", "pdf");
+                            var labelsFilename = FilenameGenerator.generateFilename(filename,"labels", "pdf");
                             proofOfPostageCreator.createLabels(proofOfPostage,labelsFilename);
-                            pdfViewer.openPDF(workingFolder + "\\" + labelsFilename, "viewerExecuteLabels");
+                            processedFiles.add(labelsFilename);
+                            pdfViewer.openPDF(storeFolder + "\\" + labelsFilename, "ViewerExecuteLabels");
                         }
 
                         // Open the proof of postage pdf
-                        pdfViewer.openPDF(workingFolder + "\\" + proofOfPostage.getFilename(), "viewerExecuteProofOfPostage");
+                        pdfViewer.openPDF(storeFolder + "\\" + proofOfPostage.getFilename(), "ViewerExecuteProofOfPostage");
 
                         // If stopWatchingAfterFirstRun is true then stop watching the folder
                         if(stopWatchingAfterFirstRun){

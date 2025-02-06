@@ -1,7 +1,6 @@
 // src/main/java/com/newfangledthings/clickdropprinthelper/PDFViewer.java
 package com.newfangledthings.clickdropprinthelper;
 
-import java.io.File;
 import java.io.IOException;
 
 public class PDFViewer {
@@ -21,26 +20,27 @@ public class PDFViewer {
      */
     public void openPDF(String filename, String viewerExecute) {
         String viewer = config.getProperty(viewerExecute);
-        // If the viewer is not set then don't open the pdf
-        if (viewer.isEmpty()){
-            System.out.println("Will not open pdf as the viewer not set for " + viewerExecute);
-            return;
-        }
+        // Disabled this as if empty it opens in default pdf viewer, that might be desirable
+        //if (viewer.isEmpty()){
+        //    System.out.println("Will not open pdf as the viewer not set for " + viewerExecute);
+        //    return;
+        //}
         // If the viewer contains %filename% then replace it with the filename
         if (viewer.contains("%filename%")) {
-            viewer = viewer.replace("%filename%", filename);
+            viewer = viewer.replace("%filename%", "\"" + filename + "\"");
         } else {
-            viewer = viewer + " " + filename;
+            viewer = viewer + " \"" + filename + "\"";
         }
         // Start a new thread to open the viewer
         final String finalViewer = viewer;
         new Thread(() -> {
             try {
-                Thread.sleep(config.getProperty("viewerDelay") != null ? Integer.parseInt(config.getProperty("viewerDelay")) * 1000 : 0);
+                Thread.sleep(config.getProperty("ViewerDelay") != null ? Integer.parseInt(config.getProperty("ViewerDelay")) * 1000L : 0);
                 System.out.println("Opening " + filename + " with " + finalViewer);
                 Runtime.getRuntime().exec(finalViewer);
             } catch (IOException | InterruptedException e) {
-                e.printStackTrace();
+                System.err.println("Error opening PDF: " + e.getMessage());
+                e.printStackTrace(System.err);
             }
         }).start();
     }
