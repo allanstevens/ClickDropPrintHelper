@@ -1,4 +1,4 @@
-# ClickDropPrintHelper
+# Click & Drop Print Helper
 
 ClickDropPrintHelper is a Java application that processes PDF files to create proof of postage documents, packing slips, and labels. It uses Apache PDFBox for PDF manipulation and Apache Commons IO for file operations.
 
@@ -44,16 +44,32 @@ The label format will need to be set as:
 
 ## Configuration
 
-Create a `config.properties` file in the root directory with the following properties:
+Create a `config.properties` file in the root directory with the following properties.  This will be generated automatically on first run if it does nto exist.
 
 ```properties
-# Folder to monitor for new PDF files
-watchFolder=path/to/watch/folder
+# Folder to monitor for new PDF files, usually your downloads folder
+WatchFolder=path/to/watch/folder
 
-# Folder to use for processing and storing intermediate files
-workingFolder=path/to/working/folder
+# Folder to for storing the generated pdfs, this can also be the downloads folder or an archive folder
+StoreFolder=path/to/store/folder
 
 # Whether to create proof of postage documents (yes/no)
-createProofOfPostage=yes
+CreateProofOfPostage=yes
 
-# Whether to create
+# Whether to add QR codes to proof of postage documents (yes/no)
+CreateQRs=yes
+
+# Whether to create labels seperate labels pdf (yes/no)
+CreateLabels=yes
+
+# Whether to create seperate packing slips pdf (yes/no)
+CreatePackingSlips=yes
+
+# Path to the header image for packing slips (optional)
+PackingSlipHeaderImage=path/to/header/image
+
+# Path to the footer image for packing slips (optional)
+PackingSlipFooterImage=path/to/footer/image
+
+# Whether to stop watching the folder after the first run (yes/no)
+StopWatchAfterFirstRun=no

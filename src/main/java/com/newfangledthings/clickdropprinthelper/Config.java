@@ -1,5 +1,6 @@
 package com.newfangledthings.clickdropprinthelper;
 
+import javax.swing.filechooser.FileSystemView;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -50,9 +51,9 @@ public class Config {
             properties.setProperty("CreateQRs", "yes");
             properties.setProperty("PackingSlipHeaderImage", "Packing Slip Header.png");
             properties.setProperty("PackingSlipFooterImage", "Packing Slip Footer.png");
-            properties.setProperty("WatchFolder", "C:\\Users\\allan\\Downloads");
+            properties.setProperty("WatchFolder", FileSystemView.getFileSystemView().getDefaultDirectory().getAbsolutePath());
             properties.setProperty("ViewerDelay", "2");
-            properties.setProperty("StoreFolder", System.getProperty("user.dir"));
+            properties.setProperty("StoreFolder", FileSystemView.getFileSystemView().getDefaultDirectory().getAbsolutePath()); //System.getProperty("user.dir"));
             properties.setProperty("StopWatchAfterFirstRun","no");
 
             properties.store(output, "Default Configuration Settings");
