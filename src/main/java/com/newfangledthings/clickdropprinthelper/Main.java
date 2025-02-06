@@ -97,18 +97,26 @@ public class Main {
                 // Get the filename from the event context
                 String filename = event.context().toString();
 
-                // Ignore files that have already been processed
-                if (processedFiles.contains(filename)) {
-                    System.out.println("Ignoring already processed file: " + filename);
-                    continue;
-                }
-
                 // If a pdf is created in the watch folder
                 if (event.kind() == ENTRY_CREATE && filename.endsWith(".pdf")) {
-                    System.out.println("Processing event kind : " + event.kind() + " - File : " + event.context());
+
+                    // Ignore files that have already been processed
+                    if (processedFiles.contains(filename)) {
+                        System.out.println("Ignoring already processed file " + filename);
+                        continue;
+                    }
+
+                    //System.out.println("Processing file " + filename);
 
                     // PDF found, will now see if it's a Royal Mail shipping label
-                    for (ProofOfPostage proofOfPostage : proofOfPostageCreator.createProofOfPostage(filename)) {
+                    var proofOfPostages = proofOfPostageCreator.createProofOfPostage(filename);
+                    if (proofOfPostages == null) {
+                        System.out.println("NOT recognised as  Click & Drop file, finished processing early");
+                        //System.err.println("Error creating proof of postage for file " + filename);
+                        continue;
+                    }
+                    for (ProofOfPostage proofOfPostage : proofOfPostages) {
+
                         //Now the proof of postage has been created with the ProofOfPostageCreator class we can add some extra helper functions
                         processedFiles.add(proofOfPostage.getFilename());
 
@@ -120,33 +128,39 @@ public class Main {
                         // If you have asked for no proof of postage then delete the first page or delete the file is qr codes don't exist
                         if (!createProofOfPostage) {
                             //If no qr codes then just delete the proof of postage
-                            if(!createQRs){
+                            if (!createQRs) {
                                 System.out.println("Deleting pdf " + filename);
                                 Files.delete(Paths.get(watchFolder + "\\" + event.context()));
-                            }
-                            else {
+                            } else {
                                 proofOfPostageCreator.removeFirstPage(proofOfPostage);
+                                System.out.println("Removed proof of postage page from  " + filename);
                             }
-                        }
-
-                        // If createPackingSlips is true copy original pdf to working folder then remove every 5th page (which is the label)
-                        if (createPackingSlips) {
-                            var packingFilename = FilenameGenerator.generateFilename(filename,"packing");
-                            proofOfPostageCreator.createPackingSlips(proofOfPostage,packingFilename);
-                            processedFiles.add(packingFilename);
-                            pdfViewer.openPDF(storeFolder + "\\" + packingFilename, "ViewerExecutePackingSlip");
-                        }
-
-                        // If createLabels is true then open the pdf with the labels
-                        if (createLabels) {
-                            var labelsFilename = FilenameGenerator.generateFilename(filename,"labels", "pdf");
-                            proofOfPostageCreator.createLabels(proofOfPostage,labelsFilename);
-                            processedFiles.add(labelsFilename);
-                            pdfViewer.openPDF(storeFolder + "\\" + labelsFilename, "ViewerExecuteLabels");
                         }
 
                         // Open the proof of postage pdf
                         pdfViewer.openPDF(storeFolder + "\\" + proofOfPostage.getFilename(), "ViewerExecuteProofOfPostage");
+
+                        // Only do the next sections if it's the first pdf
+                        if (proofOfPostage.getImageIndex()==0) {
+
+                            // If createPackingSlips is true copy original pdf to working folder then remove every 5th page (which is the label)
+                            if (createPackingSlips) {
+                                var packingFilename = FilenameGenerator.generateFilename(filename, "packing");
+                                proofOfPostageCreator.createPackingSlips(proofOfPostage, packingFilename);
+                                processedFiles.add(packingFilename);
+                                pdfViewer.openPDF(storeFolder + "\\" + packingFilename, "ViewerExecutePackingSlip");
+                                System.out.println("Created packing slips pdf " + packingFilename);
+                            }
+
+                            // If createLabels is true then open the pdf with the labels
+                            if (createLabels) {
+                                var labelsFilename = FilenameGenerator.generateFilename(filename, "labels", "pdf");
+                                proofOfPostageCreator.createLabels(proofOfPostage, labelsFilename);
+                                processedFiles.add(labelsFilename);
+                                pdfViewer.openPDF(storeFolder + "\\" + labelsFilename, "ViewerExecuteLabels");
+                                System.out.println("Created labels pdf " + labelsFilename);
+                            }
+                        }
 
                         // If stopWatchingAfterFirstRun is true then stop watching the folder
                         if(stopWatchingAfterFirstRun){
@@ -155,10 +169,11 @@ public class Main {
                             System.exit(0);
                         }
                     }
+                    System.out.println("Finished processing file " + filename);
                 }
                 // Ignore file types/events
                 else {
-                    System.out.println("Ignoring event kind : " + event.kind() + " - File : " + event.context());
+                    System.out.println("Ignoring file " + event.context());
                 }
             }
             // Reset the key

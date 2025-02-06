@@ -52,7 +52,7 @@ public class Config {
             properties.setProperty("PackingSlipHeaderImage", "Packing Slip Header.png");
             properties.setProperty("PackingSlipFooterImage", "Packing Slip Footer.png");
             properties.setProperty("WatchFolder", FileSystemView.getFileSystemView().getDefaultDirectory().getAbsolutePath());
-            properties.setProperty("ViewerDelay", "2");
+            properties.setProperty("ViewerDelay", "1");
             properties.setProperty("StoreFolder", FileSystemView.getFileSystemView().getDefaultDirectory().getAbsolutePath()); //System.getProperty("user.dir"));
             properties.setProperty("StopWatchAfterFirstRun","no");
 

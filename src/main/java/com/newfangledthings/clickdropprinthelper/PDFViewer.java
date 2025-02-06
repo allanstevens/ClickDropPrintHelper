@@ -20,11 +20,11 @@ public class PDFViewer {
      */
     public void openPDF(String filename, String viewerExecute) {
         String viewer = config.getProperty(viewerExecute);
-        // Disabled this as if empty it opens in default pdf viewer, that might be desirable
-        //if (viewer.isEmpty()){
-        //    System.out.println("Will not open pdf as the viewer not set for " + viewerExecute);
-        //    return;
-        //}
+        // Will not open if left blank
+        if (viewer.isEmpty()){
+            System.out.println("Will not open pdf as the viewer not set for " + viewerExecute);
+            return;
+        }
         // If the viewer contains %filename% then replace it with the filename
         if (viewer.contains("%filename%")) {
             viewer = viewer.replace("%filename%", "\"" + filename + "\"");

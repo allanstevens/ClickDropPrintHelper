@@ -64,9 +64,11 @@ public class ProofOfPostageCreator {
                 }
             }
             if (shippingLabels.isEmpty()) {
-                System.out.println("Output file is empty, exiting early");
+                System.out.println("Has not found any postage details");
                 return null;
             }
+
+            // Now create the Proof Of Postage PDF, if there is more than 30, then create additional pdfs
             for (int p = 0; p < shippingLabels.size(); p += 30) {
                 InputStream file = getClass().getClassLoader().getResourceAsStream("Royal Mail Proof Of Postage.pdf");
                 //File file = new File(workingFolder + "\\Royal Mail Proof Of Postage.pdf");
@@ -85,7 +87,7 @@ public class ProofOfPostageCreator {
                         acroForm.getField("address and postcode " + (i - p + 1)).setValue(label.getAddress());
                         acroForm.getField("service used " + (i - p + 1)).setValue(label.getTrackingNumber());
                     }
-                    System.out.println("Content added [" + label.getName() + "," + label.getAddress() + "," + label.getTrackingNumber() + "]");
+                    System.out.println("Found postage [" + label.getName() + "," + label.getAddress() + "," + label.getTrackingNumber() + "]");
                     countForNumberofItems++;
                 }
                 acroForm.getField("Text57").setValue(countForNumberofItems + " items");
@@ -94,11 +96,13 @@ public class ProofOfPostageCreator {
                 String uniqueFilename = FilenameGenerator.generateFilename(filename,"proof");
                 pdfRoyalMailTemplate.save(storeFolder + "\\" + uniqueFilename);
                 pdfRoyalMailTemplate.close();
+
                 proofOfPostageArrayList.add(new ProofOfPostage(
                         uniqueFilename,
                         shippingLabels.subList(p, Math.min(p + 30, shippingLabels.size())),
                         filename,
                         p));
+                System.out.println("Created proof of postage file " + uniqueFilename);
             }
         } catch (IOException e) {
             System.err.println("Error creating proof of postage: " + e.getMessage());
@@ -131,29 +135,28 @@ public class ProofOfPostageCreator {
                     PDXObject o = pdResources.getXObject(c);
                     if (o instanceof PDImageXObject) {
                         if (((PDImageXObject) o).getWidth() == 128 || ((PDImageXObject) o).getWidth() == 1050) {
-                            System.out.println("Found QR code");
+                            //System.out.println("Found QR code");
 
                             if (count >= proofOfPostage.getImageIndex() && count < proofOfPostage.getImageIndex() + 30) {
-                                ShippingLabel label = proofOfPostage.getShippingLabels().get(count);
+
+                                // Add the tracking number and name
+                                ShippingLabel label = proofOfPostage.getShippingLabels().get(count - proofOfPostage.getImageIndex());
                                 String trackingNumber = label.getTrackingNumber().trim();
                                 String name = label.getName();
 
-                                if (trackingNumber.length() > 10) {
-                                    contents.beginText();
-                                    contents.setFont(PDType1Font.COURIER, 9);
-                                    contents.newLineAtOffset(x-5, y - 15);
-                                    contents.showText(trackingNumber.substring(10));
-                                    contents.endText();
+                                contents.beginText();
+                                contents.setFont(PDType1Font.COURIER, 9);
+                                contents.newLineAtOffset(x-5, y - 15);
+                                contents.showText(trackingNumber.substring(10));
+                                contents.endText();
 
-                                    contents.beginText();
-                                    contents.setFont(PDType1Font.COURIER, 9);
-                                    contents.newLineAtOffset(x, y - 30);
-                                    contents.showText(name);
-                                    contents.endText();
-                                } else {
-                                    System.out.println("Tracking number is too short, skipping");
-                                }
+                                contents.beginText();
+                                contents.setFont(PDType1Font.COURIER, 9);
+                                contents.newLineAtOffset(x, y - 30);
+                                contents.showText(name);
+                                contents.endText();
 
+                                // Add the QR image
                                 if (((PDImageXObject) o).getWidth() == 1050) {
                                     PDImageXObject pdi = LosslessFactory.createFromImage(docLoad, ((PDImageXObject) o).getImage().getSubimage(70, 450, 280, 280));
                                     contents.drawImage(pdi, x, y, (float) pdi.getWidth() / 5, (float) pdi.getHeight() / 5);
@@ -166,13 +169,8 @@ public class ProofOfPostageCreator {
                                     x = 40;
                                     y -= 135;
                                 }
-                            } else {
-                                System.out.println("Image already added to previous pdf, skipping");
                             }
-
                             count++;
-                        } else {
-                            System.out.println("Output image not QR, skipping");
                         }
                     }
                 }
@@ -181,6 +179,8 @@ public class ProofOfPostageCreator {
             docProofPostage.save(storeFolder + "\\" + proofOfPostage.getFilename());
             docProofPostage.close();
             docLoad.close();
+            System.out.println("Added "+count+" QR codes to " +proofOfPostage.getFilename());
+
         } catch (IOException e) {
             System.err.println("Error adding QR codes: " + e.getMessage());
             e.printStackTrace(System.err);
@@ -251,9 +251,9 @@ public class ProofOfPostageCreator {
                 pagesToRemove.add(i);
             }
         }
-        // Check if the last page is not a multiple of 5 and add it to the list
+        //Check if the last page is not a multiple of 5 and add it to the list
         if (pageCount % 5 != 0) {
-            pagesToRemove.remove(pageCount - 1);
+            pagesToRemove.remove(pagesToRemove.size() - 1);
         }
         // Remove pages in reverse order
         for (int i = pagesToRemove.size() - 1; i >= 0; i--) {
