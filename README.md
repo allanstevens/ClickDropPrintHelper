@@ -2,6 +2,8 @@
 
 ClickDropPrintHelper is a Java application that processes PDF files to create proof of postage documents, packing slips, and labels. It uses Apache PDFBox for PDF manipulation and Apache Commons IO for file operations.
 
+![Bulk Proof of Postage](bulkpop.jpg)
+
 ## Features
 
 - Create a bulk proof of postage documents from the downloaded shipping labels pdf
