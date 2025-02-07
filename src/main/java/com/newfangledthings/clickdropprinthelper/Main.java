@@ -77,7 +77,7 @@ public class Main {
         boolean stopWatchingAfterFirstRun = config.getProperty("StopWatchAfterFirstRun").equals("yes");
 
         // Display all the var from above
-        System.out.println("Properties loaded from config.properties");
+        System.out.println("Properties loaded from "+ config.getConfigName());
 
         // Create watch service to monitor download folder
         WatchService watchService = FileSystems.getDefault().newWatchService();

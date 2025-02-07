@@ -75,4 +75,8 @@ public class Config {
         return properties.getProperty(key);
     }
 
+    public String getConfigName(){
+        return configFile.getName();
+    }
+
 }
