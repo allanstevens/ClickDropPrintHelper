@@ -79,10 +79,10 @@ public class Main {
         // Display all the var from above
         System.out.println("Properties loaded from "+ config.getConfigName());
 
-        System.out.println("Will "+(createProofOfPostage?"NOT ":"")+"create proof of postage pdf");
-        System.out.println("Will "+(createQRs?"NOT ":"")+"create additional QR page");
-        System.out.println("Will "+(createPackingSlips?"NOT ":"")+"create packing slips pdf");
-        System.out.println("Will "+(createLabels?"NOT ":"")+"create labels pdf");
+        System.out.println("Will "+(createProofOfPostage?"":"NOT ")+"create proof of postage pdf");
+        System.out.println("Will "+(createQRs?"":"NOT ")+"create additional QR page");
+        System.out.println("Will "+(createPackingSlips?"":"NOT ")+"create packing slips pdf");
+        System.out.println("Will "+(createLabels?"":"NOT ")+"create labels pdf");
 
         System.out.println("Created pdf's will be stored in folder " + storeFolder);
         // Create watch service to monitor download folder
