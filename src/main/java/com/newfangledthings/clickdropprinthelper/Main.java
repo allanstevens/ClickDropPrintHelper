@@ -79,14 +79,20 @@ public class Main {
         // Display all the var from above
         System.out.println("Properties loaded from "+ config.getConfigName());
 
+        System.out.println("Will "+(createProofOfPostage?"NOT ":"")+"create proof of postage pdf");
+        System.out.println("Will "+(createQRs?"NOT ":"")+"create additional QR page");
+        System.out.println("Will "+(createPackingSlips?"NOT ":"")+"create packing slips pdf");
+        System.out.println("Will "+(createLabels?"NOT ":"")+"create labels pdf");
+
+        System.out.println("Created pdf's will be stored in folder " + storeFolder);
         // Create watch service to monitor download folder
         WatchService watchService = FileSystems.getDefault().newWatchService();
         Path path = Paths.get(watchFolder);
         path.register(watchService, ENTRY_CREATE);//, ENTRY_MODIFY, ENTRY_DELETE);
-        System.out.println("Monitoring download folder [" + watchFolder + "] for pdfs");
+        System.out.println("Monitoring download folder " + watchFolder);
 
         // Adds a key listener to all you to close the app if you press X
-        System.out.println("Type EXIT to exit the application");
+        System.out.println("Type EXIT↵ to exit the application");
         Thread keyListenerThread = new Thread(() -> {
             Scanner scanner = new Scanner(System.in);
             while (true) {
@@ -102,8 +108,11 @@ public class Main {
 
         // Poll for events (look for pdf files in watch folder)
         boolean poll = true;
+        System.out.println("I have started watching for files...");
         WatchKey key = watchService.take();
+
         while (poll) {
+
             for (WatchEvent<?> event : key.pollEvents()) {
 
                 // Quick pause to stop file locking
