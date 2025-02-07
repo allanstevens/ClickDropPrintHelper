@@ -27,7 +27,7 @@ public class PDFViewer {
         }
         // If the viewer contains %filename% then replace it with the filename
         if (viewer.contains("%filename%")) {
-            viewer = viewer.replace("%filename%", "\"" + filename + "\"");
+            viewer = viewer.replace("%filename%", filename);
         } else {
             viewer = viewer + " \"" + filename + "\"";
         }

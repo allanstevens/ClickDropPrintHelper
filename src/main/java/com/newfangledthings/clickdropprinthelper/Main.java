@@ -1,8 +1,10 @@
 package com.newfangledthings.clickdropprinthelper;
 
+import java.awt.event.KeyListener;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.HashSet;
+import java.util.Scanner;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -83,28 +85,35 @@ public class Main {
         path.register(watchService, ENTRY_CREATE);//, ENTRY_MODIFY, ENTRY_DELETE);
         System.out.println("Monitoring download folder [" + watchFolder + "] for pdfs");
 
-        // Set to keep track of processed files so it does not try and convert them again
-        Set<String> processedFiles = new HashSet<>();
+        // Adds a key listener to all you to close the app if you press X
+        System.out.println("Type EXIT to exit the application");
+        Thread keyListenerThread = new Thread(() -> {
+            Scanner scanner = new Scanner(System.in);
+            while (true) {
+                String input = scanner.nextLine();
+                if ("exit".equalsIgnoreCase(input)) {
+                    System.out.println("Stopping watcher");
+                    System.exit(0);
+                    break;
+                }
+            }
+        });
+        keyListenerThread.start();
 
         // Poll for events (look for pdf files in watch folder)
         boolean poll = true;
         WatchKey key = watchService.take();
         while (poll) {
             for (WatchEvent<?> event : key.pollEvents()) {
+
                 // Quick pause to stop file locking
                 TimeUnit.SECONDS.sleep(1);
 
                 // Get the filename from the event context
                 String filename = event.context().toString();
 
-                // If a pdf is created in the watch folder
-                if (event.kind() == ENTRY_CREATE && filename.endsWith(".pdf")) {
-
-                    // Ignore files that have already been processed
-                    if (processedFiles.contains(filename)) {
-                        System.out.println("Ignoring already processed file " + filename);
-                        continue;
-                    }
+                // If an "order*.pdf" is created in the watch folder
+                if (filename.startsWith("order") && filename.endsWith(".pdf")) {
 
                     //System.out.println("Processing file " + filename);
 
@@ -116,9 +125,6 @@ public class Main {
                         continue;
                     }
                     for (ProofOfPostage proofOfPostage : proofOfPostages) {
-
-                        //Now the proof of postage has been created with the ProofOfPostageCreator class we can add some extra helper functions
-                        processedFiles.add(proofOfPostage.getFilename());
 
                         //It's a Royal Mail shipping label, will now create the QR codes
                         if (createQRs) {
@@ -147,7 +153,6 @@ public class Main {
                             if (createPackingSlips) {
                                 var packingFilename = FilenameGenerator.generateFilename(filename, "packing");
                                 proofOfPostageCreator.createPackingSlips(proofOfPostage, packingFilename);
-                                processedFiles.add(packingFilename);
                                 pdfViewer.openPDF(storeFolder + "\\" + packingFilename, "ViewerExecutePackingSlip");
                                 System.out.println("Created packing slips pdf " + packingFilename);
                             }
@@ -156,7 +161,6 @@ public class Main {
                             if (createLabels) {
                                 var labelsFilename = FilenameGenerator.generateFilename(filename, "labels", "pdf");
                                 proofOfPostageCreator.createLabels(proofOfPostage, labelsFilename);
-                                processedFiles.add(labelsFilename);
                                 pdfViewer.openPDF(storeFolder + "\\" + labelsFilename, "ViewerExecuteLabels");
                                 System.out.println("Created labels pdf " + labelsFilename);
                             }

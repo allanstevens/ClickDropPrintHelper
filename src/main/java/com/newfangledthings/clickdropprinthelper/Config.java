@@ -41,9 +41,9 @@ public class Config {
     private void createDefaultConfig() {
         try (FileOutputStream output = new FileOutputStream(configFile)) {
 
-            properties.setProperty("ViewerExecutePackingSlip", "C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe  /t \"%filename%\" \"Paper Printer\"");
-            properties.setProperty("ViewerExecuteLabels","C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe  /t \"%filename%\" \"Label Printer\"");
-            properties.setProperty("ViewerExecuteProofOfPostage", "C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe  /t \"%filename%\" \"Paper Printer\"");
+            properties.setProperty("ViewerExecutePackingSlip", "\"C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe\" /t \"%filename%\" \"Paper Printer\"");
+            properties.setProperty("ViewerExecuteLabels","\"C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe\" \"%filename%\"");
+            properties.setProperty("ViewerExecuteProofOfPostage", "\"C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe\"");
 
             properties.setProperty("CreatePackingSlips", "yes");
             properties.setProperty("CreateLabels", "yes");
