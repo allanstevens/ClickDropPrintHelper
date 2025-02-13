@@ -54,7 +54,7 @@ public class Config {
             properties.setProperty("WatchFolder", FileSystemView.getFileSystemView().getDefaultDirectory().getAbsolutePath());
             properties.setProperty("ViewerDelay", "1");
             properties.setProperty("StoreFolder", FileSystemView.getFileSystemView().getDefaultDirectory().getAbsolutePath()); //System.getProperty("user.dir"));
-            properties.setProperty("StopWatchAfterFirstRun","no");
+            properties.setProperty("BeforeRun","prompt"); //settings are stop, prompt, unset will monitor as normal and run
 
             properties.store(output, "Default Configuration Settings");
             System.out.println("Default settings saved to config.properties");

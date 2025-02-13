@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.Scanner;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.awt.Toolkit;
 
 import static java.nio.file.StandardWatchEventKinds.*;
 
@@ -74,7 +75,7 @@ public class Main {
         boolean createLabels = config.getProperty("CreateLabels").equals("yes");
         boolean createPackingSlips = config.getProperty("CreatePackingSlips").equals("yes");
         boolean createQRs = config.getProperty("CreateQRs").equals("yes");
-        boolean stopWatchingAfterFirstRun = config.getProperty("StopWatchAfterFirstRun").equals("yes");
+        String beforeRun = config.getProperty("BeforeRun");
 
         // Display all the var from above
         System.out.println("Properties loaded from "+ config.getConfigName());
@@ -125,6 +126,19 @@ public class Main {
                 if (filename.startsWith("order") && filename.endsWith(".pdf")) {
 
                     //System.out.println("Processing file " + filename);
+                    if ("prompt".equals(beforeRun)){
+                        //Make a beep ound
+                        Toolkit.getDefaultToolkit().beep();
+                        // Ask for user interaction
+                        Scanner scanner = new Scanner(System.in);
+                        System.out.println("Found " + filename + ". Do you want to process or ignore this file? (process/ignore)");
+                        String userInput = scanner.nextLine();
+
+                        if (userInput.toLowerCase().startsWith("i")) {
+                            System.out.println("Ignoring file " + filename);
+                            continue;
+                        }
+                    }
 
                     // PDF found, will now see if it's a Royal Mail shipping label
                     var proofOfPostages = proofOfPostageCreator.createProofOfPostage(filename);
@@ -175,8 +189,8 @@ public class Main {
                             }
                         }
 
-                        // If stopWatchingAfterFirstRun is true then stop watching the folder
-                        if(stopWatchingAfterFirstRun){
+                        // If BeforeRun is set to stop
+                        if(beforeRun=="stop"){
                             System.out.println("Stopping watching folder after first run");
                             // Stop the application with code 0
                             System.exit(0);
