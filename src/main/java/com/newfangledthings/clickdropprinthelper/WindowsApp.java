@@ -2,6 +2,8 @@
 package com.newfangledthings.clickdropprinthelper;
 
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.net.URL;
 import java.util.Properties;
@@ -49,6 +51,16 @@ public class WindowsApp {
         popup.add(exitItem);
 
         trayIcon.setPopupMenu(popup);
+
+        // Add left-click listener to open console window
+        trayIcon.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getButton() == MouseEvent.BUTTON1) { // Left-click
+                    consoleWindow.setVisible(true);
+                }
+            }
+        });
 
         try {
             tray.add(trayIcon);

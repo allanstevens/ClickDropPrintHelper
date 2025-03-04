@@ -8,6 +8,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -26,6 +27,11 @@ public class ConfigWindow extends JFrame {
         setSize(900, 1000);
         setLayout(new BorderLayout());
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+
+        URL imageUrl = WindowsApp.class.getResource("/icon.png");
+        if (imageUrl != null) {
+            setIconImage(new ImageIcon(imageUrl).getImage());
+        }
 
         configPanel = new JPanel();
         configPanel.setLayout(new GridLayout(0, 2));
@@ -121,13 +127,22 @@ public class ConfigWindow extends JFrame {
         Component[] components = configPanel.getComponents();
         for (int i = 0; i < components.length; i += 2) {
             JLabel label = (JLabel) components[i];
-            JTextField textField = (JTextField) components[i + 1];
             String key = getKeyFromFriendlyText(label.getText());
-            config.setProperty(key, textField.getText());
+            // Only update if it's not a header
+            if (!key.startsWith("HEADER_")) {
+                JTextField textField = (JTextField) components[i + 1];
+                config.setProperty(key, textField.getText());
+            }
         }
 
         try (FileOutputStream out = new FileOutputStream("config.properties")) {
             config.store(out, null);
+            // Close window
+            Window window = SwingUtilities.getWindowAncestor(configPanel);
+            if (window != null) {
+                window.dispose(); // Closes the JFrame or JDialog
+            }
+            //Display alert
             JOptionPane.showMessageDialog(this, "Configuration saved. Please restart the application to apply changes.");
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this, "Error saving configuration: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
