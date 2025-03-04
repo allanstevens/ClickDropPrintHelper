@@ -49,12 +49,19 @@ public class Config {
             properties.setProperty("CreateLabels", "yes");
             properties.setProperty("CreateProofOfPostage", "yes");
             properties.setProperty("CreateQRs", "yes");
+
             properties.setProperty("PackingSlipHeaderImage", "Packing Slip Header.png");
             properties.setProperty("PackingSlipFooterImage", "Packing Slip Footer.png");
+
             properties.setProperty("WatchFolder", FileSystemView.getFileSystemView().getDefaultDirectory().getAbsolutePath());
-            properties.setProperty("ViewerDelay", "1");
             properties.setProperty("StoreFolder", FileSystemView.getFileSystemView().getDefaultDirectory().getAbsolutePath()); //System.getProperty("user.dir"));
+
+            properties.setProperty("ViewerDelay", "1");
             properties.setProperty("BeforeRun","prompt"); //settings are stop, prompt, unset will monitor as normal and run
+
+            properties.setProperty("ViewerExecutePrintProofOfPostage","");
+            properties.setProperty("ViewerExecutePrintLabels","");
+            properties.setProperty("ViewerExecutePrintPackingSlip","");
 
             properties.store(output, "Default Configuration Settings");
             System.out.println("Default settings saved to config.properties");
@@ -79,4 +86,7 @@ public class Config {
         return configFile.getName();
     }
 
+    public Properties getProperties() {
+        return properties;
+    }
 }

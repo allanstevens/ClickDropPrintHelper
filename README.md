@@ -1,15 +1,20 @@
 # Click & Drop Print Helper
 
-ClickDropPrintHelper is a Java application that processes PDF files to create proof of postage documents, packing slips, and labels. It uses Apache PDFBox for PDF manipulation and Apache Commons IO for file operations.
+Click & Drop Print Helper is a tool designed to automate the printing of labels, packing slips, and proof of postage documents from the Click & Drop service. The application now includes a graphical user interface (GUI) with a system tray icon, configuration windows, and the existing console version for command-line usage.
 
 ![Bulk Proof of Postage](bulkpop.jpg)
 
 ## Features
 
-- Create a bulk proof of postage documents from the downloaded shipping labels pdf
-- Add QR codes to proof of postage documents
-- Generates packing slips with custom headers and footers
-- Generates a labels only pdf from the original PDF
+- **GUI Version**:
+   - System tray icon for easy access
+   - Configuration window to set up and save settings
+   - Console window to view logs and output
+- **Console Version**:
+   - Command-line interface for users who prefer terminal usage
+- **File Watching**:
+   - Monitors specified folders for new PDF files
+   - Automatically processes and prints documents based on configuration
 
 ## Requirements
 
@@ -44,9 +49,33 @@ The label format will need to be set as:
     mvn clean install
     ```
 
+## Usage
+
+### GUI Version
+
+1. Run the application:
+    ```sh
+    java -jar target/clickdropprinthelper.jar
+    ```
+
+2. The application will start with a system tray icon. Right-click the icon to access the following options:
+
+- Console: Opens the console window to view logs and output.
+- Configuration: Opens the configuration window to set up and save settings.
+- Exit: Closes the application.
+
+## Console Version
+
+Run the application with the configuration file:
+```sh
+java -cp target/clickdropprinthelper.jar com.newfangledthings.clickdropprinthelper.ConsoleApp config.properties
+```
+
+The application will run in the terminal, monitoring the specified folders and processing documents based on the configuration.
+
 ## Configuration
 
-Create a `config.properties` file in the root directory with the following properties.  This will be generated automatically on first run if it does nto exist.
+Create a `config.properties` file in the root directory with the following properties.  This will be generated automatically on first run if it does nto exist. This can also be updated from the Config Window in the GUI version.
 
 ```properties
 # Folder to monitor for new PDF files, usually your downloads folder.

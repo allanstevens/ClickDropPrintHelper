@@ -27,7 +27,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.newfangledthings.clickdropprinthelper.Main</mainClass>
+                            <mainClass>com.newfangledthings.clickdropprinthelper.WindowsApp</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
