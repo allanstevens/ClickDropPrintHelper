@@ -46,8 +46,8 @@ public class PDFViewer {
     }
 
     public boolean checkPrintIsOption(){
-        return (config.getProperty("ViewerExecutePrintProofOfPostage").isEmpty() &&
-                config.getProperty("ViewerExecutePrintLabels").isEmpty() &&
-                config.getProperty("ViewerExecutePrintPackingSlip").isEmpty());
+        return (!config.getProperty("ViewerExecutePrintProofOfPostage").isEmpty() ||
+                !config.getProperty("ViewerExecutePrintLabels").isEmpty() ||
+                !config.getProperty("ViewerExecutePrintPackingSlip").isEmpty());
     }
 }
