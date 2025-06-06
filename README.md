@@ -4,6 +4,8 @@ Click & Drop Print Helper is a tool designed to automate the printing of labels,
 
 ![Bulk Proof of Postage](bulkpop.jpg)
 
+I am not affiliated with Royal Mail; as a customer, I developed this tool to address certain features I felt were missing in their Click & Drop service.​
+
 ## Features
 
 - **GUI Version**:
