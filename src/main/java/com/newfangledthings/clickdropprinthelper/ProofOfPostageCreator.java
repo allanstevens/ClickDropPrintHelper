@@ -19,6 +19,8 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class ProofOfPostageCreator {
 
@@ -194,26 +196,42 @@ public class ProofOfPostageCreator {
         doc.close();
     }
 
+    public List<Integer> findPackingSlips(Boolean isPackingSlips, PDDocument doc) throws IOException {
+        List<Integer> packingSlipPages = new ArrayList<>();
+
+        // Regex pattern to match "Shipping Address" on the first or second line followed by an empty line
+        String regexPattern = "(?i)^(.*\\r?\\n)?Shipping Address";
+        Pattern pattern = Pattern.compile(regexPattern);
+
+        // Prepare text extractor
+        PDFTextStripper textStripper = new PDFTextStripper();
+
+        // Loop through all pages and find matches
+        for (int i = 0; i < doc.getNumberOfPages(); i++) {
+            textStripper.setStartPage(i + 1);
+            textStripper.setEndPage(i + 1);
+            String pageText = textStripper.getText(doc).trim();
+
+            Matcher matcher = pattern.matcher(pageText);
+            if (isPackingSlips == matcher.find()) { // If isPackingSlips is true, keep pages with the pattern; else, keep pages without it
+                packingSlipPages.add(i);
+            }
+        }
+
+        return packingSlipPages;
+    }
+
+
     public void createPackingSlips(ProofOfPostage proofOfPostage, String packingFilename) throws IOException {
         FileUtils.copyFile(new File(watchFolder + "\\" + proofOfPostage.getSourcePDF()), new File(storeFolder + "\\" + packingFilename));
         PDDocument doc = PDDocument.load(new File(storeFolder + "\\" + packingFilename));
-        // Find out the number of pages then remove every 5th page
-        int pageCount = doc.getNumberOfPages();
-        List<Integer> pagesToRemove = new ArrayList<>();
-        // Collect indices of every fifth page
-        for (int i = 0; i < pageCount; i++) {
-            if ((i + 1) % 5 == 0) {
-                pagesToRemove.add(i);
-            }
-        }
-        // Check if the last page is not a multiple of 5 and add it to the list
-        if (pageCount % 5 != 0) {
-            pagesToRemove.add(pageCount - 1);
-        }
+
         // Remove pages in reverse order
+        List<Integer> pagesToRemove = findPackingSlips(false, doc); // Get pages that do NOT match
         for (int i = pagesToRemove.size() - 1; i >= 0; i--) {
             doc.removePage(pagesToRemove.get(i));
         }
+
         // now we want to add a custom header and footer to each page of the pdf
         PDPageTree list = doc.getPages();
         var pageWidth = doc.getPage(0).getMediaBox().getWidth();
@@ -242,23 +260,13 @@ public class ProofOfPostageCreator {
     public void createLabels(ProofOfPostage proofOfPostage, String labelsFilename) throws IOException {
         FileUtils.copyFile(new File(watchFolder + "\\" + proofOfPostage.getSourcePDF()), new File(storeFolder + "\\" + labelsFilename));
         PDDocument doc = PDDocument.load(new File(storeFolder + "\\" + labelsFilename));
-        // Find out the number of pages then remove every 5th page
-        int pageCount = doc.getNumberOfPages();
-        List<Integer> pagesToRemove = new ArrayList<>();
-        // Collect indices of every fifth page
-        for (int i = 0; i < pageCount; i++) {
-            if (!((i + 1) % 5 == 0)) {
-                pagesToRemove.add(i);
-            }
-        }
-        //Check if the last page is not a multiple of 5 and add it to the list
-        if (pageCount % 5 != 0) {
-            pagesToRemove.remove(pagesToRemove.size() - 1);
-        }
+
         // Remove pages in reverse order
+        List<Integer> pagesToRemove = findPackingSlips(true, doc); // Get pages that do NOT match
         for (int i = pagesToRemove.size() - 1; i >= 0; i--) {
             doc.removePage(pagesToRemove.get(i));
         }
+
         doc.save(storeFolder + "\\" + labelsFilename);
         doc.close();
     }
